@@ -47,6 +47,44 @@ from torch import nn
 from torch.nn import functional as F
 from torchvision import transforms
 
+def train_ch3(net, train_iter, test_iter, loss, num_epochs, updater):
+    animator = Animator(xlabel='epoch', xlim=[1, num_epochs], ylim=[0.3, 0.9],
+                        legend=['train loss', 'train acc', 'test acc'])
+    for epoch in range(num_epochs):
+        train_metrics = train_epoch_ch3(net, train_iter, loss, updater)
+        test_acc = evaluate_accuracy(net, test_iter)
+        animator.add(epoch + 1, train_metrics + (test_acc,))
+    train_loss, train_acc = train_metrics
+    assert train_loss < 0.5, train_loss
+    assert train_acc <= 1 and train_acc > 0.7, train_acc
+    assert test_acc <= 1 and test_acc > 0.7, test_acc
+
+def train_epoch_ch3(net, train_iter, loss, updater):
+    if isinstance(net, torch.nn.Module):
+        net.train()
+    metric = Accumulator(3)
+    for X, y in train_iter:
+        y_hat = net(X)
+        l = loss(y_hat, y)
+        if isinstance(updater, torch.optim.Optimizer):
+            updater.zero_grad()
+            l.mean().backward()
+            updater.step()
+        else:
+            l.sum().backward()
+            updater(X.shape[0])
+        metric.add(float(l.sum()), accuracy(y_hat, y), y.numel())
+    return metric[0] / metric[2], metric[1] / metric[2]
+
+def evaluate_accuracy(net, data_iter):  #@save
+    if isinstance(net, torch.nn.Module):
+        net.eval()
+    metric = Accumulator(2)  
+    with torch.no_grad():
+        for X, y in data_iter:
+            metric.add(accuracy(net(X), y), y.numel())
+    return metric[0] / metric[1]
+
 def use_svg_display():
     """Use the svg format to display a plot in Jupyter.
 
